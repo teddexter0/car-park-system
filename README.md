@@ -13,7 +13,7 @@ Use the current demo link shared by the group or follow the XAMPP setup below.
 | Gate officer | Check vehicles in and out, record visitors, transfer vehicles between zones and correct missed checkouts. |
 | Administrator | Book or close individual bays, manage zones and view reports and the audit log. |
 
-General parking is first come, first served. Green means vacant, yellow previews a gate assignment, red means occupied, grey means unavailable and blue means booked. On the dashboard, a student can click a green tile to simulate a sensor detecting a car. Clicking the same tile again simulates departure. Administrators can select a bay and hold it for a named booking, such as a directors' meeting, or close it. Booking and closure edits stay in effect until an administrator clears them. Gate records track occupancy by zone and share the same available capacity.
+General parking is first come, first served. Green means vacant, yellow previews a gate assignment, red means occupied, grey means unavailable and blue means booked. On the dashboard, a student can click a green tile to simulate a sensor detecting a car. Clicking the same tile again simulates departure. Administrators can select a bay and hold it for a named booking, such as a directors’ meeting, or close it. Booking and closure edits stay in effect until an administrator clears them. Gate records track occupancy by zone and share the same available capacity.
 
 ## Run with XAMPP
 
