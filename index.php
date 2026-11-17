@@ -66,7 +66,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
     <section id="dashboard-screen" class="screen" aria-labelledby="dashboard-title" hidden>
         <div class="page-heading dashboard-banner">
             <div><p class="eyebrow" id="identity"></p><h1 id="dashboard-title">Parking availability</h1>
-                <p>First come, first served. Availability is based on vehicle movements recorded at the gate.</p></div>
+                <p>General parking is first come, first served. Check the map for vacant bays and guest bookings.</p></div>
             <div class="dashboard-actions">
                 <button type="button" id="open-gate" data-open-screen="gate" hidden><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Open gate desk</button>
                 <small id="updated" class="pill"></small>
@@ -74,7 +74,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
         </div>
         <div id="dashboard-stats" class="stats"></div>
         <div class="section-heading zone-heading"><div><h2>Campus parking map</h2><p class="muted">Select a zone to see its numbered bays and availability.</p></div>
-            <ul class="map-legend" aria-label="Parking status key"><li class="available-key">Available</li><li class="pending-key">Assigning</li><li class="occupied-key">Occupied</li></ul>
+            <ul class="map-legend" aria-label="Parking status key"><li class="available-key">Vacant</li><li class="pending-key">Selected</li><li class="occupied-key">Occupied</li><li class="unavailable-key">Unavailable</li><li class="booked-key">Booked</li></ul>
         </div>
         <section class="campus-board" aria-label="Illustrated campus plan">
             <div class="campus-key"><span>Campus plan</span><span>Illustrative layout</span></div>
@@ -89,8 +89,10 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
                 <div class="campus-entry"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Main gate</div>
             </div>
         </section>
+        <p id="student-bay-help" class="bay-note muted" hidden>Sensor demo: click a vacant bay to simulate arriving. Click your occupied bay again to simulate leaving before choosing another.</p>
+        <p id="admin-bay-help" class="bay-note muted" hidden>Select a bay to book it for guests, mark it unavailable or return it to general parking.</p>
         <div id="dashboard-zones" class="zone-grid"></div>
-        <p class="bay-note muted">Bay labels are for the illustration. The gate records occupancy and assignments by zone.</p>
+        <p class="bay-note muted">Gate check-ins record the zone. The map places those vehicles in the first bays without a simulated arrival, booking or closure.</p>
     </section>
     <section id="gate-screen" class="screen" aria-labelledby="gate-title" hidden>
         <div class="page-heading desk-heading"><span class="desk-symbol"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></span><div><p class="eyebrow">Security desk</p><h1 id="gate-title">Gate operations</h1><p>Check vehicles in on the left. Search active sessions to check out or transfer a vehicle.</p></div></div>
@@ -149,7 +151,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
     </section>
     <noscript><p>This application requires JavaScript to sign in and load parking records.</p></noscript>
 </main>
-<footer>Unofficial academic prototype · Use fictional records only</footer>
+<footer>Unofficial academic prototype � Use fictional records only</footer>
 <dialog id="action-dialog" aria-labelledby="action-title">
     <form id="action-form">
         <h2 id="action-title"></h2>
