@@ -76,7 +76,7 @@ function updateUser(user) {
     document.querySelector('[data-screen="gate"]').hidden = !canUseGate;
     $('open-gate').hidden = !canUseGate;
     document.querySelector('[data-screen="admin"]').hidden = user?.role !== 'admin';
-    $('identity').textContent = user ? `${user.name} · ${roles[user.role]}` : '';
+    $('identity').textContent = user ? `${user.name} · ${roles[user.role]}` : 'Public parking map';
     if (!user) {
         $('checkin-form').reset();
         $('ams-search').value = '';
@@ -100,6 +100,7 @@ function updateUser(user) {
 
 function show(page) {
     screen = page;
+    $('open-login').hidden = Boolean(currentUser) || page === 'login';
     setMenu(false);
     all('.screen').forEach((section) => { section.hidden = section.id !== `${page}-screen`; });
     all('[data-screen]').forEach((button) => {
@@ -120,8 +121,9 @@ function stats(id, values) {
 
 function zoneCards(id, zones) {
     const container = $(id);
-    const interactive = id === 'dashboard-zones' && ['student', 'admin'].includes(currentUser?.role);
-    const signature = JSON.stringify([zones, [...bayPages]]);
+    const paginated = id === 'dashboard-zones';
+    const interactive = paginated && ['student', 'admin'].includes(currentUser?.role);
+    const signature = JSON.stringify([zones, [...bayPages], interactive]);
     if (container.dataset.snapshot === signature && container.childElementCount) return;
     const before = new Map([...container.querySelectorAll('.zone-card')].map((card) =>
         [card.dataset.zoneId, Number(card.dataset.occupied)]));
@@ -133,7 +135,7 @@ function zoneCards(id, zones) {
                 <span class="pill ${Number(zone.available) === 0 ? 'warning' : ''}">${zone.available} available</span>
             </div>
             <p class="muted">${escape(zone.description)}</p>
-            ${parkingTiles(zone, '', before.get(String(zone.id)), interactive)}
+            ${parkingTiles(zone, '', before.get(String(zone.id)), interactive, paginated)}
             <p>${zone.occupied} of ${zone.capacity} occupied</p>
             ${interactive && currentUser.role === 'student' ? `<p id="bay-notice-${Number(zone.id)}" class="notice" role="status" hidden></p>` : ''}
         </article>`).join('') || '<p>No active parking zones.</p>';
@@ -155,13 +157,13 @@ function renderCampus(zones) {
     }
 }
 
-function parkingTiles(zone, phase, previousOccupied, interactive = false) {
+function parkingTiles(zone, phase, previousOccupied, interactive = false, paginated = false) {
     const zoneId = Number(zone.id);
     const capacity = Number(zone.capacity);
     const code = zoneCode(zoneId);
     const explicit = new Map(zone.bays.map((bay) => [bay.number, bay]));
     const pages = Math.ceil(capacity / baysPerPage);
-    let page = interactive ? Math.min(bayPages.get(zoneId) || 0, pages - 1) : 0;
+    let page = paginated ? Math.min(bayPages.get(zoneId) || 0, pages - 1) : 0;
     if ((phase === 'pending' && Number(zone.available) > 0) || phase === 'confirmed') {
         let assigned = Number(zone.gate_occupied) + (phase === 'pending' ? 1 : 0);
         for (const number of explicit.keys()) {
@@ -195,7 +197,7 @@ function parkingTiles(zone, phase, previousOccupied, interactive = false) {
             ? `<button type="button" ${attrs} id="bay-${zoneId}-${number}" data-bay="${number}" data-zone-id="${zoneId}" data-status="${status}" aria-label="${escape(description)}">${content}</button>`
             : `<span ${attrs} role="img" aria-label="${escape(description)}"><span class="tile-label" aria-hidden="true">${content}</span></span>`);
     }
-    const pager = interactive && pages > 1 ? `<div class="bay-pages">
+    const pager = paginated && pages > 1 ? `<div class="bay-pages">
         <button type="button" data-bay-page="${page - 1}" data-zone-id="${zoneId}" ${page === 0 ? 'disabled' : ''}>Previous bays</button>
         <small>${start}–${end} of ${capacity}</small>
         <button type="button" data-bay-page="${page + 1}" data-zone-id="${zoneId}" ${page === pages - 1 ? 'disabled' : ''}>Next bays</button>
@@ -236,7 +238,7 @@ function renderAssignment() {
 
 async function loadDashboard(poll = false) {
     const request = ++dashboardRequest;
-    const result = await api('dashboard', undefined, poll ? { poll: '1' } : {});
+    const result = await api(currentUser ? 'dashboard' : 'availability', undefined, poll ? { poll: '1' } : {});
     if (!result || request !== dashboardRequest) return;
     if (screen === 'dashboard') {
         dashboardZones = result.zones;
@@ -447,8 +449,9 @@ $('login-form').addEventListener('submit', (event) => {
 $('logout').addEventListener('click', (event) => run(event, async () => {
     if (!await api('logout', {})) return;
     updateUser(null);
-    show('login');
+    show('dashboard');
     notify('Signed out.');
+    await loadDashboard();
 }));
 $('menu-toggle').addEventListener('click', () => setMenu($('navigation').dataset.open !== 'true'));
 document.addEventListener('keydown', (event) => {
@@ -596,7 +599,7 @@ $('tour-next').addEventListener('click', () => {
 });
 
 setInterval(() => {
-    if (!currentUser || screen !== 'dashboard' || document.hidden) return;
+    if (screen !== 'dashboard' || document.hidden) return;
     loadDashboard(true).catch((error) => { $('updated').textContent = error.message; });
 }, 10000);
 
@@ -605,10 +608,10 @@ async function initialize() {
     if (!state) return;
     $('demo-credentials').hidden = !state.demo && $('demo-credentials').dataset.public !== 'true';
     updateUser(state.user);
-    show(state.user ? 'dashboard' : 'login');
-    if (state.user) await loadDashboard();
+    show('dashboard');
+    await loadDashboard();
 }
 initialize().catch((error) => {
-    show('login');
+    show('dashboard');
     notify(error.message, true);
 });
