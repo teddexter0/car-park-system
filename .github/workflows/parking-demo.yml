@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: temporary-parking-demo-bays
+  group: temporary-parking-demo-bays-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -45,6 +45,7 @@ jobs:
           export MYSQL_PWD="$PARKING_DB_PASSWORD"
           mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root < database.sql
           mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root strathmore_smart_parking < parking-bays.sql
+          node --check app.js
           php tests.php
           unset MYSQL_PWD
           cat > "$RUNNER_TEMP/parking-router.php" <<'PHP'
