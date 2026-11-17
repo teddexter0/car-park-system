@@ -52,7 +52,8 @@ function login(array $data): array
     }
     $key = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? 'unknown');
     $now = time();
-    $result = transaction(function () use ($email, $password, $key, $now): array {
+    $operatorsOnly = getenv('PARKING_PUBLIC_DEMO') === '1';
+    $result = transaction(function () use ($email, $password, $key, $now, $operatorsOnly): array {
         sql('INSERT IGNORE INTO login_attempts (scope_key, window_started) VALUES (?, ?)', [$key, $now]);
         $rate = sql('SELECT attempts, window_started FROM login_attempts WHERE scope_key = ? FOR UPDATE', [$key])->fetch();
         $attempts = $now - (int) $rate['window_started'] < 900 ? (int) $rate['attempts'] : 0;
@@ -69,6 +70,9 @@ function login(array $data): array
                 [$attempts + 1, $attempts ? $rate['window_started'] : $now, $key]);
             audit(null, 'login_failed', 'authentication', null);
             return ['status' => 401, 'message' => 'Email or password is incorrect.'];
+        }
+        if ($operatorsOnly && !in_array($user['role'], ['admin', 'security'], true)) {
+            return ['status' => 403, 'message' => 'Use the public map to try the sensor demo. Admin and security can sign in here.'];
         }
         audit((int) $user['id'], 'login', 'authentication', (int) $user['id']);
         unset($user['password_hash']);
