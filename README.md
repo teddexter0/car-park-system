@@ -4,7 +4,7 @@ A Software Engineering class prototype built with PHP, JavaScript and MariaDB. I
 
 Use the current demo link shared by the group or follow the XAMPP setup below.
 
-The link opens the read-only parking map without an account. Choose **Demo sign-in** to simulate a sensor event as a student or use the security and admin controls.
+The link opens the interactive parking map without an account. Click a vacant bay to simulate arrival and click it again to simulate departure. Each browser tab can simulate one occupied bay at a time. Admin and security sign in to update the shared map and gate records. The hosted demo opens with two fictional examples in Visitor Parking: C02 booked for a directors’ meeting and C03 closed for maintenance.
 
 ## What each role can do
 
