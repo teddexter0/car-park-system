@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: temporary-parking-demo
+  group: temporary-parking-demo-bays
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: v0.3.0-demo
           persist-credentials: false
       - uses: shivammathur/setup-php@v2
         with:
@@ -45,6 +44,8 @@ jobs:
           set -euo pipefail
           export MYSQL_PWD="$PARKING_DB_PASSWORD"
           mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root < database.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root strathmore_smart_parking < parking-bays.sql
+          php tests.php
           unset MYSQL_PWD
           cat > "$RUNNER_TEMP/parking-router.php" <<'PHP'
           <?php
@@ -70,7 +71,7 @@ jobs:
           for attempt in {1..30}; do
             url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$RUNNER_TEMP/parking-tunnel.log" | head -1 || true)
             if [[ -n "$url" ]] && curl -fsS --max-time 5 "$url/api.php?action=state" | jq -e '.user == null and (.csrf | length > 0)' >/dev/null; then
-              for path in /phpmyadmin/ /database.sql /.git/config; do
+              for path in /phpmyadmin/ /database.sql /parking-bays.sql /.git/config; do
                 test "$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "$url$path")" = 404
               done
               printf '%s\n' "$url" | tee "$RUNNER_TEMP/demo-url.txt"
