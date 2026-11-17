@@ -41,7 +41,7 @@ function startServer(string $schema): string
     $address = stream_socket_get_name($socket, false);
     fclose($socket);
     $environment = array_merge(getenv(), [
-        'PARKING_DB_NAME' => $schema, 'PARKING_TEST_MODE' => '1', 'PARKING_TEST_TIMEOUT' => '4',
+        'PARKING_DB_NAME' => $schema, 'PARKING_TEST_MODE' => '1', 'PARKING_TEST_TIMEOUT' => '4', 'PARKING_PUBLIC_DEMO' => '0',
     ]);
     $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
     $process = proc_open([PHP_BINARY, '-S', $address], [
