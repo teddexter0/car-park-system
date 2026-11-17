@@ -365,7 +365,7 @@ function updateAccount(array $data, int $actor): array
 
 try {
     $action = field($_GET, 'action', 30);
-    $reads = ['state', 'dashboard', 'ams', 'active', 'zones', 'audit', 'report', 'accounts'];
+    $reads = ['state', 'availability', 'dashboard', 'ams', 'active', 'zones', 'audit', 'report', 'accounts'];
     $writes = ['login', 'logout', 'zone_create', 'zone_update', 'zone_delete', 'checkin', 'checkout', 'transfer', 'correct_checkout',
         'account_status', 'bay_occupy', 'bay_release', 'bay_manage'];
     if (!in_array($action, array_merge($reads, $writes), true)) {
@@ -375,6 +375,10 @@ try {
     if ($_SERVER['REQUEST_METHOD'] !== $method) {
         header("Allow: $method");
         fail(405, "Use $method for this action.");
+    }
+    if ($action === 'availability') {
+        echo json_encode(dashboard(), JSON_THROW_ON_ERROR);
+        return;
     }
     startParkingSession();
     $data = [];
