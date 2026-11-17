@@ -253,7 +253,7 @@ function checkin(array $data, int $actor): array
     $zoneId = integer($data, 'zone_id');
     $plate = strtoupper(preg_replace('/\s+/', '', field($data, 'vehicle_plate', 32)));
     if (!preg_match('/^[A-Z0-9][A-Z0-9-]{2,15}$/D', $plate)) {
-        fail(422, 'Enter a vehicle registration of 3-16 letters, digits or hyphens.');
+        fail(422, 'Enter a vehicle registration of 3–16 letters, digits or hyphens.');
     }
     $kind = field($data, 'kind', 20);
     if (!in_array($kind, ['institutional', 'visitor'], true)) {
