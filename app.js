@@ -24,6 +24,7 @@ let sessionsRequest = 0;
 let reportRequest = 0;
 let assignment = null;
 let dashboardZones = [];
+let simulatedBay = null;
 const bayPages = new Map();
 const baysPerPage = 56;
 const bayStatuses = { available: 'Vacant', pending: 'Selected', occupied: 'Occupied', booked: 'Booked', unavailable: 'Unavailable' };
@@ -71,7 +72,7 @@ function updateUser(user) {
     $('menu-toggle').hidden = !user;
     $('logout').hidden = !user;
     const canUseGate = ['security', 'admin'].includes(user?.role);
-    $('student-bay-help').hidden = user?.role !== 'student';
+    $('student-bay-help').hidden = Boolean(user) && user.role !== 'student';
     $('admin-bay-help').hidden = user?.role !== 'admin';
     document.querySelector('[data-screen="gate"]').hidden = !canUseGate;
     $('open-gate').hidden = !canUseGate;
@@ -122,8 +123,9 @@ function stats(id, values) {
 function zoneCards(id, zones) {
     const container = $(id);
     const paginated = id === 'dashboard-zones';
-    const interactive = paginated && ['student', 'admin'].includes(currentUser?.role);
-    const signature = JSON.stringify([zones, [...bayPages], interactive]);
+    const role = currentUser?.role || 'guest';
+    const interactive = paginated && ['guest', 'student', 'admin'].includes(role);
+    const signature = JSON.stringify([zones, [...bayPages], role]);
     if (container.dataset.snapshot === signature && container.childElementCount) return;
     const before = new Map([...container.querySelectorAll('.zone-card')].map((card) =>
         [card.dataset.zoneId, Number(card.dataset.occupied)]));
@@ -137,7 +139,7 @@ function zoneCards(id, zones) {
             <p class="muted">${escape(zone.description)}</p>
             ${parkingTiles(zone, '', before.get(String(zone.id)), interactive, paginated)}
             <p>${zone.occupied} of ${zone.capacity} occupied</p>
-            ${interactive && currentUser.role === 'student' ? `<p id="bay-notice-${Number(zone.id)}" class="notice" role="status" hidden></p>` : ''}
+            ${interactive && role !== 'admin' ? `<p id="bay-notice-${Number(zone.id)}" class="notice" role="status" hidden></p>` : ''}
         </article>`).join('') || '<p>No active parking zones.</p>';
     if (focused) $(focused)?.focus({ preventScroll: true });
 }
@@ -189,7 +191,7 @@ function parkingTiles(zone, phase, previousOccupied, interactive = false, pagina
         const changed = !bay && atGate !== (gateRank <= previousGate);
         const label = `${code}${String(number).padStart(2, '0')}`;
         const description = `${label}, ${bay?.mine ? 'occupied by you' : bayStatuses[status]}${bay?.label ? `, ${bay.label}` : ''}`;
-        const canClick = interactive && (status === 'available' || (currentUser.role === 'student' ? bay?.mine : status !== 'occupied'));
+        const canClick = interactive && (status === 'available' || (currentUser?.role === 'admin' ? status !== 'occupied' : bay?.mine));
         const car = ['occupied', 'pending'].includes(status) ? '<svg class="icon" aria-hidden="true"><use href="#i-car"/></svg>' : '';
         const content = `${car}<span>${label}</span>${bay?.mine ? '<span class="tile-owner">You</span>' : ''}`;
         const attrs = `class="parking-tile tile-${status}${changed ? ' tile-change' : ''}" title="${escape(description)}"`;
@@ -242,10 +244,7 @@ async function loadDashboard(poll = false) {
     if (!result || request !== dashboardRequest) return;
     if (screen === 'dashboard') {
         dashboardZones = result.zones;
-        stats('dashboard-stats', [['Total capacity', result.capacity], ['Occupied spaces', result.occupied],
-            ['Available spaces', result.available], ['Occupancy', `${result.percentage}%`]]);
-        zoneCards('dashboard-zones', result.zones);
-        renderCampus(result.zones);
+        renderDashboardMap();
         $('updated').textContent = `Updated ${new Date().toLocaleTimeString([], { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', second: '2-digit' })} EAT`;
     }
     if (screen === 'gate') {
@@ -253,6 +252,29 @@ async function loadDashboard(poll = false) {
         setOptions($('checkin-zone'), availableZones(), 'Select a zone');
         renderAssignment();
     }
+}
+
+function renderDashboardMap() {
+    const selected = !currentUser && simulatedBay;
+    const zones = dashboardZones.map((zone) => {
+        if (!selected || Number(zone.id) !== selected.zoneId) return zone;
+        const before = zone.bays.filter((bay) => bay.number < selected.number).length;
+        if (selected.number > Number(zone.capacity) || selected.number - before <= Number(zone.gate_occupied)
+            || zone.bays.some((bay) => bay.number === selected.number)) {
+            simulatedBay = null;
+            return zone;
+        }
+        const bays = [...zone.bays, { number: selected.number, status: 'occupied', mine: true }];
+        return { ...zone, bays, occupied: Number(zone.occupied) + 1, available: Number(zone.available) - 1 };
+    });
+    if (selected && !zones.some((zone) => Number(zone.id) === selected.zoneId)) simulatedBay = null;
+    const capacity = zones.reduce((sum, zone) => sum + Number(zone.capacity), 0);
+    const occupied = zones.reduce((sum, zone) => sum + Number(zone.occupied), 0);
+    const available = zones.reduce((sum, zone) => sum + Number(zone.available), 0);
+    stats('dashboard-stats', [['Total capacity', capacity], ['Occupied spaces', occupied], ['Available spaces', available],
+        ['Occupancy', `${capacity ? Math.round(occupied * 100 / capacity) : 0}%`]]);
+    zoneCards('dashboard-zones', zones);
+    renderCampus(zones);
 }
 
 function availableZones(exclude = 0) {
@@ -413,9 +435,9 @@ function onSearch(id, work) {
 }
 
 const tour = [
-    ['Sign in as a student', 'Use student@parking.test and the demo password ParkingDemo26!. This fictional account is linked to the simulated AMS.'],
-    ['Check available spaces', 'Open Dashboard. Find Visitor Parking and note how many spaces are available.'],
-    ['Manage a parking zone', 'Sign out and sign in as admin@parking.test with the same password. Add a temporary zone, edit its capacity, then delete it while it has no history.'],
+    ['Try the sensor demo', 'Click a green bay on the public map to simulate arrival. Click the red bay again to simulate leaving.'],
+    ['Check available spaces', 'Find Visitor Parking. Blue bays are booked and grey bays are unavailable.'],
+    ['Manage a parking zone', 'Sign in as admin@parking.test with the demo password ParkingDemo26!. Add a temporary zone, edit its capacity, then delete it while it has no history.'],
     ['Switch to the security desk', 'Sign out and sign in as security@parking.test with the same password. Open Gate operations.'],
     ['Enter a fictional visitor', 'Choose Visitor. Use Quinn Demo, Interview, Careers Office and vehicle DEMO701. Select Visitor Parking. Mark the physical ID inspected and retained for the demo.'],
     ['Record the vehicle entry', 'Click Check in. The vehicle should appear in Active sessions with its assigned zone.'],
@@ -540,16 +562,27 @@ $('dashboard-zones').addEventListener('click', (event) => {
     if (control) {
         const zoneId = Number(control.dataset.zoneId);
         bayPages.set(zoneId, Number(control.dataset.bayPage));
-        zoneCards('dashboard-zones', dashboardZones);
+        renderDashboardMap();
         $(`zone-${zoneId}`).focus({ preventScroll: true });
         return;
     }
     const button = event.target.closest('[data-bay]');
-    if (!button || !currentUser) return;
+    if (!button) return;
     const zone = dashboardZones.find((item) => Number(item.id) === Number(button.dataset.zoneId));
     const number = Number(button.dataset.bay);
     const current = button.dataset.status;
-    if (currentUser.role === 'admin') {
+    if (!currentUser) {
+        const target = `bay-notice-${Number(zone.id)}`;
+        if (simulatedBay && current !== 'occupied') {
+            notify('Click your red bay again to leave before choosing another.', true, target);
+            return;
+        }
+        const leaving = current === 'occupied';
+        simulatedBay = leaving ? null : { zoneId: Number(zone.id), number };
+        renderDashboardMap();
+        $(`bay-${Number(zone.id)}-${number}`)?.focus({ preventScroll: true });
+        notify(leaving ? 'Departure simulated. The bay is vacant.' : 'Arrival simulated. Click your red bay again to leave.', false, target);
+    } else if (currentUser.role === 'admin') {
         manageBay(zone, number, current);
     } else if (currentUser.role === 'student') {
         const target = `bay-notice-${Number(zone.id)}`;
