@@ -76,7 +76,7 @@ function updateUser(user) {
     document.querySelector('[data-screen="gate"]').hidden = !canUseGate;
     $('open-gate').hidden = !canUseGate;
     document.querySelector('[data-screen="admin"]').hidden = user?.role !== 'admin';
-    $('identity').textContent = user ? `${user.name} � ${roles[user.role]}` : '';
+    $('identity').textContent = user ? `${user.name} · ${roles[user.role]}` : '';
     if (!user) {
         $('checkin-form').reset();
         $('ams-search').value = '';
@@ -197,7 +197,7 @@ function parkingTiles(zone, phase, previousOccupied, interactive = false) {
     }
     const pager = interactive && pages > 1 ? `<div class="bay-pages">
         <button type="button" data-bay-page="${page - 1}" data-zone-id="${zoneId}" ${page === 0 ? 'disabled' : ''}>Previous bays</button>
-        <small>${start}-${end} of ${capacity}</small>
+        <small>${start}–${end} of ${capacity}</small>
         <button type="button" data-bay-page="${page + 1}" data-zone-id="${zoneId}" ${page === pages - 1 ? 'disabled' : ''}>Next bays</button>
         </div>` : '';
     return `<div class="parking-tiles">${tiles.join('')}</div>${pager}`;
@@ -209,7 +209,7 @@ function manageBay(zone, number, current) {
     const options = ['available', 'booked', 'unavailable'].map((status) =>
         `<option value="${status}" ${status === (current === 'available' ? 'booked' : current) ? 'selected' : ''}>${bayStatuses[status]}</option>`);
     openAction(`Manage bay ${label}`, `<label>Status <select name="status">${options.join('')}</select></label>
-        <label id="booking-field">Booking for <input name="booking_label" maxlength="100" placeholder="e.g. Directors' meeting" value="${escape(booking)}"></label>`,
+        <label id="booking-field">Booking for <input name="booking_label" maxlength="100" placeholder="e.g. Directors’ meeting" value="${escape(booking)}"></label>`,
     'Save bay', (form) => api('bay_manage', { zone_id: zone.id, bay_number: number, current, ...Object.fromEntries(new FormData(form)) }));
     const form = $('action-form');
     const showBooking = () => {
@@ -227,7 +227,7 @@ function renderAssignment() {
     const phase = assignment?.phase || (zone ? 'pending' : '');
     const message = !zone ? 'Choose a zone to preview the assignment.'
         : phase === 'confirmed' ? `Check-in confirmed in ${zone.name}. ${zone.available} available.`
-        : phase === 'saving' ? `Recording the assignment in ${zone.name}.`
+        : phase === 'saving' ? `Recording the assignment in ${zone.name}…`
         : `Assigning to ${zone.name}. Confirm with Check in.`;
     if ($('assignment-state').textContent !== message) $('assignment-state').textContent = message;
     $('assignment-map').innerHTML = zone ? parkingTiles(zone, phase === 'saving' ? 'pending' : phase, assignment?.previous) : '';
@@ -256,7 +256,7 @@ async function loadDashboard(poll = false) {
 function availableZones(exclude = 0) {
     return gateZones.filter((zone) => Number(zone.id) !== exclude).map((zone) => ({
         id: zone.id,
-        label: `${zoneCode(zone.id)} � ${zone.name} (${zone.available} available)`,
+        label: `${zoneCode(zone.id)} · ${zone.name} (${zone.available} available)`,
         disabled: Number(zone.available) === 0,
     }));
 }
@@ -276,7 +276,7 @@ async function loadAms() {
     const request = ++amsRequest;
     const result = await api('ams', undefined, { q: $('ams-search').value });
     if (!result || request !== amsRequest) return;
-    const users = result.users.map((user) => ({ id: user.id, label: `${user.name} � ${user.institutional_id}` }));
+    const users = result.users.map((user) => ({ id: user.id, label: `${user.name} · ${user.institutional_id}` }));
     setOptions($('ams-users'), users, users.length ? 'Select an account' : 'No matches');
 }
 
@@ -291,9 +291,9 @@ async function loadActive() {
     activeSessions = result.sessions;
     $('active-list').innerHTML = activeSessions.map((session) => record(
         `${escape(session.vehicle_plate)} <small>Session #${session.id}</small>`,
-        `<small>${escape(session.driver)} � ${roles[session.driver_type]} � ${escape(session.zone)}</small>
+        `<small>${escape(session.driver)} · ${roles[session.driver_type]} · ${escape(session.zone)}</small>
          <small>Since ${timestamp(session.checkin_at)}</small>
-         ${session.destination ? `<small>${escape(session.purpose)} � ${escape(session.destination)}</small>` : ''}
+         ${session.destination ? `<small>${escape(session.purpose)} · ${escape(session.destination)}</small>` : ''}
          ${Number(session.needs_review) ? '<span class="pill warning">Review: parked over 12 hours</span>' : ''}
          ${Number(session.id_retained) ? '<span class="pill warning">Physical ID held</span>' : ''}`,
         `<button data-operation="checkout" data-id="${session.id}">Check out</button>
@@ -315,19 +315,19 @@ async function loadAdmin(section = adminSection) {
     if (section === 'zones') {
         adminZones = result.zones;
         $('zone-list').innerHTML = adminZones.map((zone) => record(escape(zone.name),
-            `<small>${escape(zone.description)}</small><small>${zone.occupied} / ${zone.capacity} occupied � ${Number(zone.active) ? 'Active' : 'Inactive'}</small>`,
+            `<small>${escape(zone.description)}</small><small>${zone.occupied} / ${zone.capacity} occupied · ${Number(zone.active) ? 'Active' : 'Inactive'}</small>`,
             `<button data-zone="edit" data-id="${zone.id}">Edit</button><button data-zone="delete" data-id="${zone.id}">Delete</button>`,
         )).join('') || '<p>No zones. Add one to get started.</p>';
     } else if (section === 'audit') {
         $('audit-list').innerHTML = result.logs.map((log) => {
             const details = Object.entries(JSON.parse(log.metadata)).map(([key, value]) =>
-                `${key.replaceAll('_', ' ')}: ${value}`).join(' � ');
+                `${key.replaceAll('_', ' ')}: ${value}`).join(' · ');
             return record(escape(log.action.replaceAll('_', ' ')),
-                `<small>${escape(log.actor || 'Unauthenticated')} � ${timestamp(log.created_at)} � ${escape(log.entity_type)} ${log.entity_id ?? ''}</small><small>${escape(details)}</small>`);
+                `<small>${escape(log.actor || 'Unauthenticated')} · ${timestamp(log.created_at)} · ${escape(log.entity_type)} ${log.entity_id ?? ''}</small><small>${escape(details)}</small>`);
         }).join('') || '<p>No audit events.</p>';
     } else {
         $('account-list').innerHTML = result.accounts.map((account) => record(escape(account.name),
-            `<small>${escape(account.email)} � ${roles[account.role]} � ${Number(account.active) ? 'Active' : 'Inactive'}</small>
+            `<small>${escape(account.email)} · ${roles[account.role]} · ${Number(account.active) ? 'Active' : 'Inactive'}</small>
              <small>${escape(account.institutional_id || '')}</small>`,
             account.id == currentUser.id ? '' :
                 `<button data-account="${account.id}" data-active="${Number(account.active) ? 0 : 1}">${Number(account.active) ? 'Deactivate' : 'Reactivate'}</button>`,
@@ -343,9 +343,9 @@ async function loadReport() {
         ['Exits today', result.exits], ['Active visitors', result.active_visitors]]);
     zoneCards('report-zones', result.zones);
     $('history-list').innerHTML = result.sessions.map((session) => record(
-        `${escape(session.vehicle_plate)} � #${session.id}`,
-        `<small>${escape(session.driver)} � ${escape(session.zone)}</small>
-         <small>Entry ${timestamp(session.checkin_at)} � ${session.checkout_at ? `Exit ${timestamp(session.checkout_at)}` : 'Active'}</small>`,
+        `${escape(session.vehicle_plate)} · #${session.id}`,
+        `<small>${escape(session.driver)} · ${escape(session.zone)}</small>
+         <small>Entry ${timestamp(session.checkin_at)} · ${session.checkout_at ? `Exit ${timestamp(session.checkout_at)}` : 'Active'}</small>`,
     )).join('') || '<p>No matching sessions.</p>';
 }
 
@@ -569,7 +569,7 @@ $('action-form').addEventListener('submit', (event) => {
         const result = await dialogSubmit(event.target);
         if (!result) return;
         $('action-dialog').close();
-        notify(result.return_id ? 'Checkout recorded. Return the visitor's physically retained ID.' : 'Parking record updated.');
+        notify(result.return_id ? 'Checkout recorded. Return the visitor’s physically retained ID.' : 'Parking record updated.');
         try {
             if (screen === 'gate') await Promise.all([loadDashboard(), loadActive()]);
             if (screen === 'admin') await loadAdmin();
