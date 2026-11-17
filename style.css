@@ -19,7 +19,7 @@ h3 { font-size: 1.08rem; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 button, input, select { min-width: 0; border: 1px solid #c6d2dd; border-radius: 8px; padding: .54rem .75rem; color: var(--ink); background: var(--white); }
-button:hover { background: #e9eff5; }
+button:hover:where(:not(.parking-tile)) { background: #e9eff5; }
 button:disabled { cursor: default; opacity: .55; }
 :focus-visible { outline: 3px solid #147b92; outline-offset: 2px; }
 input, select { width: 100%; min-height: 42px; }
@@ -116,6 +116,8 @@ dialog h2, dialog h3 { margin-bottom: .5rem; }
 .available-key { --key: #86dfb9; color: #11553b; }
 .pending-key { --key: #ffd16a; color: #754711; }
 .occupied-key { --key: #f5a8a1; color: #842f30; }
+.booked-key { --key: #a8cbff; color: #234883; }
+.unavailable-key { --key: #d0d3d7; color: #4a5059; }
 .zone-card { box-shadow: 0 7px 20px #17394c0a; }
 .zone-card:target { outline: 3px solid #b57a0b; outline-offset: 3px; }
 .zone-title { display: flex; align-items: center; gap: .45rem; }
@@ -162,6 +164,13 @@ a.lot-link:hover { border-color: #94671b; background: #fff8e6; }
 .parking-tile .icon { width: 14px; height: 12px; }
 .tile-available { color: #80dfb3; background: #264c47; }
 .tile-occupied { color: #ffd5cf; background: #934a4b; }
+.tile-booked { color: #e0efff; background: #2a5790; }
+.tile-unavailable { color: #f2f3f5; background: #555e68; }
+.tile-label { display: grid; justify-items: center; }
+.tile-owner { font-size: .57rem; }
+button.parking-tile:hover { filter: brightness(1.22); }
+button.parking-tile:focus-visible { outline: 2px solid #ffe49c; outline-offset: 1px; }
+.bay-pages { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; margin-top: .5rem; }
 .tile-pending { color: #35230d; background: #ffcf69; animation: assign-space 1.1s ease-in-out 3; }
 .tile-change { animation: parking-change .65s ease-out both; }
 @keyframes assign-space { 50% { box-shadow: 0 0 0 2px #ffdf8d, 0 0 12px #ffd16a; transform: translateY(-2px); } }
