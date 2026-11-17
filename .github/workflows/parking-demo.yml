@@ -47,6 +47,11 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root strathmore_smart_parking < parking-bays.sql
           node --check app.js
           php tests.php
+          mysql --protocol=tcp -h 127.0.0.1 -P "$PARKING_DB_PORT" -u root strathmore_smart_parking <<'SQL'
+          INSERT INTO parking_bays (zone_id, bay_number, status, booking_label) VALUES
+            (3, 2, 'booked', 'Directors meeting'),
+            (3, 3, 'unavailable', NULL);
+          SQL
           unset MYSQL_PWD
           cat > "$RUNNER_TEMP/parking-router.php" <<'PHP'
           <?php
