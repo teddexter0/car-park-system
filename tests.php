@@ -196,12 +196,15 @@ try {
 
     scenario('A01', 'Authentication and simulated AMS', function () use ($student, $url) {
         $student->request('dashboard', 401);
+        check(count($student->request('availability')['zones']) === 3, 'The public map did not show all active zones');
         $student->request('state');
+        $student->request('bay_occupy', 401, ['zone_id' => 3, 'bay_number' => 1, 'current' => 'available']);
+        $student->request('bay_manage', 401, ['zone_id' => 3, 'bay_number' => 1, 'current' => 'available', 'status' => 'unavailable']);
         $student->request('login', 401, ['email' => 'student@parking.test', 'password' => 'wrong']);
         check($student->login('student')['user']['role'] === 'student', 'Unexpected student role');
         check((new Client($url))->login('staff')['user']['role'] === 'staff', 'Unexpected staff role');
         $student->request('dashboard');
-        return 'Anonymous and invalid credentials got 401; student and staff signed in; dashboard returned 200.';
+        return 'Guests could read availability, anonymous writes returned 401, and student and staff could sign in.';
     });
     scenario('A02', 'Role boundaries, CSRF and logout', function () use ($student, $security) {
         $student->request('zones', 403);
@@ -238,6 +241,9 @@ try {
         check($studentZone['available'] === 0 && $studentZone['occupied'] === 0, 'Held bays were counted incorrectly');
         check(array_column($studentZone['bays'], 'status') === ['booked', 'unavailable'], 'Bay states were missing');
         check(!isset($studentZone['bays'][0]['label']), 'Booking details were exposed to a student');
+        $publicZone = zone($student->request('availability'), $id);
+        check($publicZone['available'] === 0 && $publicZone['bays'][0]['status'] === 'booked'
+            && !isset($publicZone['bays'][0]['label']), 'The public map did not show a private booking correctly');
         check(zone($admin->request('dashboard'), $id)['bays'][0]['label'] === 'Directors meeting', 'Booking label missing');
         $student->request('bay_occupy', 409, $firstBay + ['current' => 'available']);
         $security->request('checkin', 409, driver(2, 'BAYS001', $id));
