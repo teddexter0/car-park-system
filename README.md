@@ -4,6 +4,8 @@ A Software Engineering class prototype built with PHP, JavaScript and MariaDB. I
 
 Use the current demo link shared by the group or follow the XAMPP setup below.
 
+The link opens the read-only parking map without an account. Choose **Demo sign-in** to simulate a sensor event as a student or use the security and admin controls.
+
 ## What each role can do
 
 | Role | Tasks |
