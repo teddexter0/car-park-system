@@ -129,14 +129,15 @@ function zone(array $result, int $id): array
     throw new RuntimeException("Zone $id was not found");
 }
 
-function race(Client $a, Client $b, int $zone, PDO $pdo): array
+function race(array $requests, array $zones, PDO $pdo): array
 {
     $multi = curl_multi_init();
-    $requests = [$a->handle('checkin', driver(1, 'RACEA1', $zone)), $b->handle('checkin', driver(2, 'RACEB2', $zone))];
     $pdo->beginTransaction();
     $lock = $pdo->prepare('SELECT id FROM parking_zones WHERE id = ? FOR UPDATE');
-    $lock->execute([$zone]);
-    $lock->closeCursor();
+    foreach ($zones as $zone) {
+        $lock->execute([$zone]);
+        $lock->closeCursor();
+    }
     try {
         foreach ($requests as $request) {
             curl_multi_add_handle($multi, $request);
@@ -178,6 +179,7 @@ try {
     $created = true;
     $ddl = file_get_contents(__DIR__ . '/database.sql');
     $ddl = preg_replace('/\ACREATE DATABASE[^;]+;\s*USE[^;]+;\s*/i', '', $ddl);
+    $ddl .= file_get_contents(__DIR__ . '/parking-bays.sql');
     $pdo->exec("USE `$schema`");
     foreach (explode(';', $ddl) as $statement) {
         if (trim($statement) !== '') {
@@ -222,6 +224,49 @@ try {
         $admin->request('zone_delete', 200, ['id' => $id]);
         check(!in_array($id, array_column($admin->request('zones')['zones'], 'id')), 'Deleted zone still exists');
         return 'Temporary zone read at capacity 3, edited to 5 and removed from persisted results.';
+    });
+    scenario('B01', 'Guest bookings, unavailable bays and shared availability', function () use ($admin, $security, $student) {
+        $student->login('student');
+        $id = (int) $admin->request('zone_create', 200, ['name' => 'Bays Demo', 'capacity' => 2])['id'];
+        $firstBay = ['zone_id' => $id, 'bay_number' => 1];
+        $secondBay = ['zone_id' => $id, 'bay_number' => 2];
+        $booking = ['current' => 'available', 'status' => 'booked', 'booking_label' => 'Directors meeting'];
+        $student->request('bay_manage', 403, $firstBay + $booking);
+        $admin->request('bay_manage', 200, $firstBay + $booking);
+        $admin->request('bay_manage', 200, $secondBay + ['current' => 'available', 'status' => 'unavailable']);
+        $studentZone = zone($student->request('dashboard'), $id);
+        check($studentZone['available'] === 0 && $studentZone['occupied'] === 0, 'Held bays were counted incorrectly');
+        check(array_column($studentZone['bays'], 'status') === ['booked', 'unavailable'], 'Bay states were missing');
+        check(!isset($studentZone['bays'][0]['label']), 'Booking details were exposed to a student');
+        check(zone($admin->request('dashboard'), $id)['bays'][0]['label'] === 'Directors meeting', 'Booking label missing');
+        $student->request('bay_occupy', 409, $firstBay + ['current' => 'available']);
+        $security->request('checkin', 409, driver(2, 'BAYS001', $id));
+        $admin->request('bay_manage', 200, $secondBay + ['current' => 'unavailable', 'status' => 'available']);
+        $entry = $security->request('checkin', 200, driver(2, 'BAYS001', $id));
+        $admin->request('bay_manage', 409, $secondBay + $booking);
+        $security->request('checkout', 200, ['id' => $entry['id']]);
+        $admin->request('bay_manage', 200, $firstBay + ['current' => 'booked', 'status' => 'available']);
+        check(zone($student->request('dashboard'), $id)['available'] === 2, 'Cleared bays did not reopen');
+        return 'Booking and closure persisted, reduced availability and blocked both student and gate claims.';
+    });
+    scenario('B02', 'A student can occupy one bay across zones and sessions', function () use ($admin, $student, $url2, $pdo) {
+        $other = new Client($url2);
+        $other->login('student');
+        $a = ['zone_id' => 1, 'bay_number' => 50];
+        $b = ['zone_id' => 3, 'bay_number' => 12];
+        $claim = ['current' => 'available'];
+        $statuses = race([$student->handle('bay_occupy', $a + $claim), $other->handle('bay_occupy', $b + $claim)], [1, 3], $pdo);
+        check($statuses === [200, 409], 'Concurrent claims should have exactly one winner');
+        $dashboard = $student->request('dashboard');
+        $mineInA = zone($dashboard, 1)['bays'][0]['mine'] ?? false;
+        [$own, $next] = $mineInA ? [$a, $b] : [$b, $a];
+        check(zone($dashboard, $own['zone_id'])['bays'][0]['mine'], 'The student could not see their bay');
+        $admin->request('bay_release', 403, $own + ['current' => 'occupied']);
+        $student->request('bay_occupy', 409, $next + $claim);
+        $student->request('bay_release', 200, $own + ['current' => 'occupied']);
+        $student->request('bay_occupy', 200, $next + $claim);
+        $student->request('bay_release', 200, $next + ['current' => 'occupied']);
+        return 'Two sessions competing across zones got 200 and 409. Releasing the winning bay allowed another claim.';
     });
     scenario('P01', 'Student and staff entry and live counts', function () use ($admin, $security, &$zoneId, &$first) {
         $zoneId = $admin->request('zone_create', 200, ['name' => 'Lifecycle Demo', 'capacity' => 2])['id'];
@@ -269,7 +314,8 @@ try {
         $raceZone = $admin->request('zone_create', 200, ['name' => 'Race Demo', 'capacity' => 1])['id'];
         $other = new Client($url2);
         $other->login('security');
-        $statuses = race($security, $other, $raceZone, $pdo);
+        $statuses = race([$security->handle('checkin', driver(1, 'RACEA1', $raceZone)),
+            $other->handle('checkin', driver(2, 'RACEB2', $raceZone))], [$raceZone], $pdo);
         check($statuses === [200, 409], 'Unexpected concurrent statuses: ' . implode(', ', $statuses));
         check((int) zone($admin->request('zones'), $raceZone)['occupied'] === 1, 'Race oversubscribed the zone');
         return 'Two HTTP requests blocked on the same zone row; after release one got 200 and one 409; exactly one occupied.';
