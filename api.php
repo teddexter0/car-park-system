@@ -82,22 +82,45 @@ function login(array $data): array
     return $result + ['csrf' => $_SESSION['csrf']];
 }
 
-function zones(bool $includeInactive = false): array
+function zones(bool $includeInactive = false, ?array $viewer = null): array
 {
-    return sql("SELECT z.id, z.name, z.description, z.capacity, z.active, COUNT(s.id) AS occupied,
-        z.capacity - COUNT(s.id) AS available
-        FROM parking_zones z LEFT JOIN parking_sessions s ON s.zone_id = z.id AND s.checkout_at IS NULL
-        WHERE (? = 1 OR z.active = 1)
-        GROUP BY z.id, z.name, z.description, z.capacity, z.active ORDER BY z.id", [(int) $includeInactive])->fetchAll();
+    $rows = sql('SELECT z.id, z.name, z.description, z.capacity, z.active,
+        COALESCE(g.total, 0) AS gate_occupied, b.bay_number, b.status, b.student_id, b.booking_label
+        FROM parking_zones z
+        LEFT JOIN (SELECT zone_id, COUNT(*) AS total FROM parking_sessions WHERE checkout_at IS NULL GROUP BY zone_id) g
+            ON g.zone_id = z.id
+        LEFT JOIN parking_bays b ON b.zone_id = z.id
+        WHERE (? = 1 OR z.active = 1) ORDER BY z.id, b.bay_number', [(int) $includeInactive]);
+    $zones = [];
+    foreach ($rows as $row) {
+        $id = (int) $row['id'];
+        $zones[$id] ??= array_diff_key($row, array_flip(['bay_number', 'status', 'student_id', 'booking_label'])) + [
+            'occupied' => (int) $row['gate_occupied'],
+            'available' => (int) $row['capacity'] - (int) $row['gate_occupied'],
+            'bays' => [],
+        ];
+        if ($row['bay_number'] !== null) {
+            $zones[$id]['available']--;
+            $zones[$id]['occupied'] += (int) ($row['status'] === 'occupied');
+            $bay = ['number' => (int) $row['bay_number'], 'status' => $row['status'],
+                'mine' => $row['student_id'] !== null && (int) $row['student_id'] === (int) ($viewer['id'] ?? 0)];
+            if (($viewer['role'] ?? '') === 'admin' && $row['booking_label'] !== null) {
+                $bay['label'] = $row['booking_label'];
+            }
+            $zones[$id]['bays'][] = $bay;
+        }
+    }
+    return array_values($zones);
 }
 
-function dashboard(): array
+function dashboard(?array $viewer = null): array
 {
-    $list = zones();
+    $list = zones(false, $viewer);
     $capacity = array_sum(array_column($list, 'capacity'));
     $occupied = array_sum(array_column($list, 'occupied'));
     return ['zones' => $list, 'capacity' => $capacity, 'occupied' => $occupied,
-        'available' => $capacity - $occupied, 'percentage' => $capacity ? round($occupied * 100 / $capacity) : 0];
+        'available' => array_sum(array_column($list, 'available')),
+        'percentage' => $capacity ? round($occupied * 100 / $capacity) : 0];
 }
 
 function lockZone(int $id): array
@@ -116,9 +139,62 @@ function occupancy(int $zone): int
 
 function requireSpace(array $zone): void
 {
-    if (!$zone['active'] || occupancy((int) $zone['id']) >= (int) $zone['capacity']) {
+    $id = (int) $zone['id'];
+    $held = (int) sql('SELECT COUNT(*) FROM parking_bays WHERE zone_id = ?', [$id])->fetchColumn();
+    if (!$zone['active'] || occupancy($id) + $held >= (int) $zone['capacity']) {
         fail(409, 'The selected zone is full or inactive.');
     }
+}
+
+function changeBay(string $action, array $data, int $actor): array
+{
+    $zoneId = integer($data, 'zone_id');
+    $number = integer($data, 'bay_number', 9999);
+    $current = field($data, 'current', 16);
+    $status = match ($action) {
+        'bay_occupy' => 'occupied',
+        'bay_release' => 'available',
+        'bay_manage' => field($data, 'status', 16),
+    };
+    $adminStates = ['available', 'booked', 'unavailable'];
+    if ($action === 'bay_manage' && (!in_array($current, $adminStates, true) || !in_array($status, $adminStates, true))) {
+        fail(422, 'Choose a valid bay status.');
+    }
+    $label = $status === 'booked' ? field($data, 'booking_label', 100) : null;
+    return transaction(function () use ($action, $actor, $zoneId, $number, $current, $status, $label): array {
+        $zone = lockZone($zoneId);
+        if (!$zone['active'] || $number > (int) $zone['capacity']) {
+            fail(409, 'That bay is no longer in an active parking zone.');
+        }
+        $bay = sql('SELECT status, student_id FROM parking_bays WHERE zone_id = ? AND bay_number = ?', [$zoneId, $number])->fetch();
+        $previous = $bay['status'] ?? 'available';
+        if (!$bay) {
+            // Gate sessions only identify a zone. Map them to the first bays without explicit state.
+            $earlier = (int) sql('SELECT COUNT(*) FROM parking_bays WHERE zone_id = ? AND bay_number < ?',
+                [$zoneId, $number])->fetchColumn();
+            if ($number - $earlier <= occupancy($zoneId)) {
+                $previous = 'occupied';
+            }
+        }
+        if ($action === 'bay_release' && (int) ($bay['student_id'] ?? 0) !== $actor) {
+            fail(409, 'You can only release the bay you occupied.');
+        }
+        if ($previous !== $current || ($action === 'bay_occupy' && $previous !== 'available')) {
+            fail(409, 'That bay has changed. Refresh and choose again.');
+        }
+        if ($status === 'available') {
+            sql('DELETE FROM parking_bays WHERE zone_id = ? AND bay_number = ?', [$zoneId, $number]);
+        } elseif ($bay) {
+            sql('UPDATE parking_bays SET status = ?, booking_label = ? WHERE zone_id = ? AND bay_number = ?',
+                [$status, $label, $zoneId, $number]);
+        } else {
+            sql('INSERT INTO parking_bays (zone_id, bay_number, status, student_id, booking_label) VALUES (?,?,?,?,?)',
+                [$zoneId, $number, $status, $status === 'occupied' ? $actor : null, $label]);
+        }
+        audit($actor, $action, 'parking_bay', $zoneId,
+            ['bay_number' => $number, 'previous_status' => $previous, 'status' => $status, 'booking_label' => $label]);
+        return ['status' => $status];
+    });
 }
 
 function changeZone(string $action, array $data, int $actor): array
@@ -130,6 +206,9 @@ function changeZone(string $action, array $data, int $actor): array
             if (sql('SELECT 1 FROM parking_sessions WHERE zone_id = ? LIMIT 1', [$id])->fetchColumn()) {
                 fail(409, 'This zone has parking history. Deactivate it after all vehicles leave.');
             }
+            if (sql('SELECT 1 FROM parking_bays WHERE zone_id = ? LIMIT 1', [$id])->fetchColumn()) {
+                fail(409, 'Release the occupied, booked and unavailable bays before deleting this zone.');
+            }
             sql('DELETE FROM parking_zones WHERE id = ?', [$id]);
             audit($actor, 'zone_deleted', 'zone', $id, ['name' => $zone['name']]);
             return ['id' => $id];
@@ -140,8 +219,10 @@ function changeZone(string $action, array $data, int $actor): array
         $active = flag($data, 'active', true);
         if ($zone) {
             $occupied = occupancy($id);
-            if ($capacity < $occupied || (!$active && $occupied > 0)) {
-                fail(409, 'Capacity must cover occupied spaces, and a zone must be empty before deactivation.');
+            $bays = sql('SELECT COUNT(*) AS total, MAX(bay_number) AS highest FROM parking_bays WHERE zone_id = ?', [$id])->fetch();
+            $used = $occupied + (int) $bays['total'];
+            if ($capacity < max($used, (int) $bays['highest']) || (!$active && $used > 0)) {
+                fail(409, 'Capacity must cover occupied and held bays. Clear all bays before deactivation.');
             }
             sql('UPDATE parking_zones SET name = ?, description = ?, capacity = ?, active = ? WHERE id = ?',
                 [$name, $description, $capacity, (int) $active, $id]);
@@ -172,7 +253,7 @@ function checkin(array $data, int $actor): array
     $zoneId = integer($data, 'zone_id');
     $plate = strtoupper(preg_replace('/\s+/', '', field($data, 'vehicle_plate', 32)));
     if (!preg_match('/^[A-Z0-9][A-Z0-9-]{2,15}$/D', $plate)) {
-        fail(422, 'Enter a vehicle registration of 3–16 letters, digits or hyphens.');
+        fail(422, 'Enter a vehicle registration of 3-16 letters, digits or hyphens.');
     }
     $kind = field($data, 'kind', 20);
     if (!in_array($kind, ['institutional', 'visitor'], true)) {
@@ -285,7 +366,8 @@ function updateAccount(array $data, int $actor): array
 try {
     $action = field($_GET, 'action', 30);
     $reads = ['state', 'dashboard', 'ams', 'active', 'zones', 'audit', 'report', 'accounts'];
-    $writes = ['login', 'logout', 'zone_create', 'zone_update', 'zone_delete', 'checkin', 'checkout', 'transfer', 'correct_checkout', 'account_status'];
+    $writes = ['login', 'logout', 'zone_create', 'zone_update', 'zone_delete', 'checkin', 'checkout', 'transfer', 'correct_checkout',
+        'account_status', 'bay_occupy', 'bay_release', 'bay_manage'];
     if (!in_array($action, array_merge($reads, $writes), true)) {
         fail(404, 'Unknown action.');
     }
@@ -321,10 +403,11 @@ try {
         if (!$user) {
             fail(401, 'Sign in to continue.');
         }
-        $adminOnly = ['zones', 'zone_create', 'zone_update', 'zone_delete', 'audit', 'report', 'accounts', 'account_status'];
+        $adminOnly = ['zones', 'zone_create', 'zone_update', 'zone_delete', 'audit', 'report', 'accounts', 'account_status', 'bay_manage'];
         $gateOnly = ['ams', 'active', 'checkin', 'checkout', 'transfer', 'correct_checkout'];
         if ((in_array($action, $adminOnly, true) && $user['role'] !== 'admin')
-            || (in_array($action, $gateOnly, true) && !in_array($user['role'], ['security', 'admin'], true))) {
+            || (in_array($action, $gateOnly, true) && !in_array($user['role'], ['security', 'admin'], true))
+            || (in_array($action, ['bay_occupy', 'bay_release'], true) && $user['role'] !== 'student')) {
             fail(403, 'Your role does not have access to this action.');
         }
         $actor = (int) $user['id'];
@@ -341,7 +424,7 @@ try {
                 session_regenerate_id(true);
                 return ['csrf' => $_SESSION['csrf'] = bin2hex(random_bytes(32))];
             })(),
-            'dashboard' => dashboard(),
+            'dashboard' => dashboard($user),
             'ams' => ['users' => amsUsers()],
             'active' => ['sessions' => sessions(true)],
             'zones' => ['zones' => zones(true)],
@@ -354,6 +437,7 @@ try {
             'accounts' => ['accounts' => sql('SELECT u.id, u.name, u.email, u.role, u.active, m.institutional_id
                 FROM users u LEFT JOIN mock_ams m ON m.id = u.ams_id ORDER BY u.id')->fetchAll()],
             'account_status' => updateAccount($data, $actor),
+            'bay_occupy', 'bay_release', 'bay_manage' => changeBay($action, $data, $actor),
         };
     }
     echo json_encode($result, JSON_THROW_ON_ERROR);
@@ -364,8 +448,11 @@ try {
     $code = (int) ($error->errorInfo[1] ?? 0);
     if ($code === 1062) {
         http_response_code(409);
-        echo json_encode(['error' => ($action ?? '') === 'checkin'
-            ? 'That vehicle already has an active parking session.' : 'A zone with that name already exists.']);
+        echo json_encode(['error' => match ($action ?? '') {
+            'checkin' => 'That vehicle already has an active parking session.',
+            'bay_occupy' => 'Release your current bay before occupying another one.',
+            default => 'A zone with that name already exists.',
+        }]);
     } elseif (in_array($code, [1205, 1213], true)) {
         http_response_code(409);
         echo json_encode(['error' => 'Another operation changed these records. Refresh and try again.']);
