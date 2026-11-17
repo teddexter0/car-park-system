@@ -10,7 +10,7 @@ from pathlib import Path
 
 PLAN = Path(".parking-commit-plan.json")
 PROJECT_FILES = {
-    "README.md", "api.php", "app.js", "config.php", "database.sql",
+    "README.md", "api.php", "app.js", "config.php", "database.sql", "parking-bays.sql",
     "index.php", "style.css", "tests.php",
 }
 
