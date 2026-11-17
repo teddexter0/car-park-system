@@ -32,7 +32,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
         </nav>
         <div class="header-actions">
             <button id="tour-button" class="quiet" type="button">Demo tour</button>
-            <button id="open-login" type="button" data-open-screen="login" hidden>Demo sign-in</button>
+            <button id="open-login" type="button" data-open-screen="login" hidden>Admin / security sign-in</button>
             <button id="logout" class="quiet" type="button" hidden>Sign out</button>
         </div>
     </div>
@@ -51,15 +51,14 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
         </div>
         <form id="login-form" class="panel login-form">
             <h2>Sign in</h2>
-            <p class="muted">Sign in to simulate a sensor event, use the gate desk, or manage parking.</p>
-            <label>Email <input required type="email" name="email" autocomplete="username" maxlength="150" placeholder="student@parking.test"></label>
+            <p class="muted">Sign in to manage bays or use the gate desk.</p>
+            <label>Email <input required type="email" name="email" autocomplete="username" maxlength="150" placeholder="admin@parking.test"></label>
             <label>Password <input required type="password" name="password" autocomplete="current-password" maxlength="72"></label>
             <button type="submit" class="primary">Sign in</button>
             <button id="back-to-map" type="button" class="quiet" data-open-screen="dashboard">Back to parking map</button>
             <details id="demo-credentials" data-public="<?= getenv('PARKING_PUBLIC_DEMO') === '1' ? 'true' : 'false' ?>" hidden><summary>Demo credentials</summary>
                 <p>Password for each role <strong>ParkingDemo26!</strong></p>
                 <div class="demo-picks">
-                    <button type="button" data-demo="student">Student</button><button type="button" data-demo="staff">Staff</button>
                     <button type="button" data-demo="security">Security</button><button type="button" data-demo="admin">Admin</button>
                 </div>
             </details>
@@ -91,7 +90,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
                 <div class="campus-entry"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Main gate</div>
             </div>
         </section>
-        <p id="student-bay-help" class="bay-note muted" hidden>Sensor demo: click a vacant bay to simulate arriving. Click your occupied bay again to simulate leaving before choosing another.</p>
+        <p id="student-bay-help" class="bay-note muted" hidden><strong>Try the sensor demo.</strong> Click a green bay to turn it red. Click the same bay again to leave. Visitors can simulate one bay at a time in their own browser.</p>
         <p id="admin-bay-help" class="bay-note muted" hidden>Select a bay to book it for guests, mark it unavailable or return it to general parking.</p>
         <div id="dashboard-zones" class="zone-grid"></div>
         <p class="bay-note muted">Gate check-ins record the zone. The map places those vehicles in the first bays without a simulated arrival, booking or closure.</p>
