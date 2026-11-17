@@ -151,7 +151,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
     </section>
     <noscript><p>This application requires JavaScript to sign in and load parking records.</p></noscript>
 </main>
-<footer>Unofficial academic prototype � Use fictional records only</footer>
+<footer>Unofficial academic prototype · Use fictional records only</footer>
 <dialog id="action-dialog" aria-labelledby="action-title">
     <form id="action-form">
         <h2 id="action-title"></h2>
