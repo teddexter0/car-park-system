@@ -32,6 +32,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
         </nav>
         <div class="header-actions">
             <button id="tour-button" class="quiet" type="button">Demo tour</button>
+            <button id="open-login" type="button" data-open-screen="login" hidden>Demo sign-in</button>
             <button id="logout" class="quiet" type="button" hidden>Sign out</button>
         </div>
     </div>
@@ -50,10 +51,11 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
         </div>
         <form id="login-form" class="panel login-form">
             <h2>Sign in</h2>
-            <p class="muted">Use a fictional campus, security or administrator account.</p>
+            <p class="muted">Sign in to simulate a sensor event, use the gate desk, or manage parking.</p>
             <label>Email <input required type="email" name="email" autocomplete="username" maxlength="150" placeholder="student@parking.test"></label>
             <label>Password <input required type="password" name="password" autocomplete="current-password" maxlength="72"></label>
             <button type="submit" class="primary">Sign in</button>
+            <button id="back-to-map" type="button" class="quiet" data-open-screen="dashboard">Back to parking map</button>
             <details id="demo-credentials" data-public="<?= getenv('PARKING_PUBLIC_DEMO') === '1' ? 'true' : 'false' ?>" hidden><summary>Demo credentials</summary>
                 <p>Password for each role <strong>ParkingDemo26!</strong></p>
                 <div class="demo-picks">
@@ -66,7 +68,7 @@ header('Content-Security-Policy: default-src \'self\'; base-uri \'none\'; frame-
     <section id="dashboard-screen" class="screen" aria-labelledby="dashboard-title" hidden>
         <div class="page-heading dashboard-banner">
             <div><p class="eyebrow" id="identity"></p><h1 id="dashboard-title">Parking availability</h1>
-                <p>General parking is first come, first served. Check the map for vacant bays and guest bookings.</p></div>
+                <p>General parking is first come, first served. Check the map for vacant, booked and unavailable bays.</p></div>
             <div class="dashboard-actions">
                 <button type="button" id="open-gate" data-open-screen="gate" hidden><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Open gate desk</button>
                 <small id="updated" class="pill"></small>
