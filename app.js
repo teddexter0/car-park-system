@@ -498,7 +498,9 @@ function renderAudit(result) {
     setOptions($('audit-filters').elements.event, result.events.map((action) => ({
         id: action, label: activityLabel(action),
     })), 'All events');
-    $('audit-list').innerHTML = result.logs.map((log) => {
+
+    $('audit-list').innerHTML = result.logs.length
+    ? result.logs.map((log) => {
         const details = Object.entries(JSON.parse(log.metadata)).map(([key, value]) => {
             if (key === 'reason_recorded') return 'Reason recorded';
             const label = activityLabel(key);
@@ -508,7 +510,9 @@ function renderAudit(result) {
         return record(escape(activityLabel(log.action)),
             `<small>${escape(log.actor || 'Unauthenticated')} · ${timestamp(log.created_at)} · ${escape(activityLabel(log.entity_type))} ${escape(log.entity_id)}</small>
              ${details ? `<small>${escape(details)}</small>` : ''}`);
-    }).join('');
+    }).join('')
+    : '<div class="empty-state">No audit events found. Try changing your filters.</div>';
+
 }
 
 function renderReport(result) {
@@ -519,11 +523,15 @@ function renderReport(result) {
     stats('report-period-stats', [['Gate entries', result.entries], ['Recorded exits', result.exits]]);
     stats('report-stats', [['Occupied now', result.occupied], ['Available now', result.available], ['Active visitor sessions', result.active_visitors]]);
     zoneCards('report-zones', result.zones);
-    $('history-list').innerHTML = result.sessions.map((session) => record(
+
+    $('history-list').innerHTML = result.sessions.length
+    ? result.sessions.map((session) => record(
         session.driver_type === 'visitor' ? `Visitor session #${Number(session.id)}` : `${escape(session.vehicle_plate)} · #${Number(session.id)}`,
         `<small>${escape(session.driver || 'Visitor')} · ${escape(session.zone)}</small>
          <small>Entry ${timestamp(session.checkin_at)} · ${session.checkout_at ? `Exit ${timestamp(session.checkout_at)}` : 'Active now'}</small>`,
-    )).join('');
+    )).join('')
+    : '<div class="empty-state">No parking sessions found for this period. Try changing your filters.</div>';
+
 }
 
 function toggleVisitorFields() {

@@ -219,3 +219,12 @@ button.parking-tile:focus-visible { outline: 2px solid #ffe49c; outline-offset: 
 @media (prefers-reduced-motion: reduce) {
     .tile-pending, .tile-change, .entry-lane .icon { animation: none; }
 }
+.empty-state {
+    padding: 24px 16px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+}
