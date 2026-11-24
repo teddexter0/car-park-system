@@ -255,6 +255,77 @@ try {
         check(!in_array($id, array_column($admin->request('zones')['zones'], 'id')), 'Deleted zone still exists');
         return 'Temporary zone read at capacity 3, edited to 5 and removed from persisted results.';
     });
+
+    scenario('C02', 'Zone capacity and administrative safeguards', function () use ($admin) {
+        $id = $admin->request('zone_create', 200, [
+            'name' => 'Admin Safeguards Demo',
+            'capacity' => 5,
+        ])['id'];
+
+        $bay1 = ['zone_id' => $id, 'bay_number' => 4];
+        $bay2 = ['zone_id' => $id, 'bay_number' => 5];
+
+        $admin->request('bay_manage', 200, $bay1 + [
+            'current' => 'available',
+            'status' => 'booked',
+            'booking_label' => 'Admin test booking',
+        ]);
+
+        $admin->request('zone_update', 409, [
+            'id' => $id,
+            'name' => 'Admin Safeguards Demo',
+            'capacity' => 3,
+        ]);
+
+        $admin->request('zone_update', 409, [
+            'id' => $id,
+            'name' => 'Admin Safeguards Demo',
+            'capacity' => 5,
+            'active' => false,
+        ]);
+
+        $admin->request('bay_manage', 200, $bay2 + [
+            'current' => 'available',
+            'status' => 'unavailable',
+        ]);
+
+        $admin->request('zone_update', 409, [
+            'id' => $id,
+            'name' => 'Admin Safeguards Demo',
+            'capacity' => 5,
+            'active' => false,
+        ]);
+
+        $admin->request('bay_manage', 409, $bay1 + [
+            'current' => 'available',
+            'status' => 'unavailable',
+        ]);
+
+        $admin->request('bay_manage', 200, $bay1 + [
+            'current' => 'booked',
+            'status' => 'available',
+        ]);
+
+        $admin->request('bay_manage', 200, $bay2 + [
+            'current' => 'unavailable',
+            'status' => 'available',
+        ]);
+
+        $admin->request('zone_update', 200, [
+            'id' => $id,
+            'name' => 'Admin Safeguards Demo',
+            'capacity' => 5,
+            'active' => false,
+        ]);
+
+        check(!in_array($id, array_column($admin->request('dashboard')['zones'], 'id')),
+            'Deactivated zone remained on the active dashboard');
+
+        $admin->request('zone_delete', 200, ['id' => $id]);
+
+        return 'Capacity reduction, booked/unavailable zone deactivation and stale bay updates were rejected. Clearing both bays allowed deactivation.';
+    });
+
     scenario('B01', 'Guest bookings, unavailable bays and shared availability', function () use ($admin, $security, $student) {
         $student->login('student');
         $id = (int) $admin->request('zone_create', 200, ['name' => 'Bays Demo', 'capacity' => 2])['id'];
